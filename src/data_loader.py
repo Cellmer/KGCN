@@ -104,3 +104,46 @@ def construct_adj(args, kg, entity_num):
         adj_relation[entity] = np.array([neighbors[i][1] for i in sampled_indices])
 
     return adj_entity, adj_relation
+
+
+def construct_adj_with_degree_weighted_sampling(args, kg, entity_num):
+    print('constructing adjacency matrix with degree-weighted sampling ...')
+
+    # Initialize adjacency matrices
+    adj_entity = np.zeros([entity_num, args.neighbor_sample_size], dtype=np.int64)
+    adj_relation = np.zeros([entity_num, args.neighbor_sample_size], dtype=np.int64)
+
+    for entity in range(entity_num):
+        neighbors = kg.get(entity, [])
+        if not neighbors:
+            continue  # Skip entities with no neighbors
+
+        # Calculate degrees for each neighbor
+        neighbor_degrees = np.array([len(kg.get(neighbor[0], [])) for neighbor in neighbors], dtype=np.float32)
+
+        # Normalize probabilities
+        neighbor_probs = neighbor_degrees / np.sum(neighbor_degrees)
+
+        # Sample neighbors based on degree-weighted probabilities
+        n_neighbors = len(neighbors)
+        if n_neighbors >= args.neighbor_sample_size:
+            sampled_indices = np.random.choice(
+                range(n_neighbors),
+                size=args.neighbor_sample_size,
+                replace=False,
+                p=neighbor_probs
+            )
+        else:
+            # Pad with replacement sampling if fewer than K neighbors
+            sampled_indices = np.random.choice(
+                range(n_neighbors),
+                size=args.neighbor_sample_size,
+                replace=True,
+                p=neighbor_probs
+            )
+
+        sampled_neighbors = [neighbors[i] for i in sampled_indices]
+        adj_entity[entity] = [neighbor[0] for neighbor in sampled_neighbors]
+        adj_relation[entity] = [neighbor[1] for neighbor in sampled_neighbors]
+
+    return adj_entity, adj_relation

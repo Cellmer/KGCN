@@ -147,3 +147,55 @@ def construct_adj_with_degree_weighted_sampling(args, kg, entity_num):
         adj_relation[entity] = [neighbor[1] for neighbor in sampled_neighbors]
 
     return adj_entity, adj_relation
+
+
+def construct_adj_with_relation_frequency_weighted_sampling(args, kg, entity_num):
+    print('constructing adjacency matrix with relation-frequency sampling ...')
+
+    # Count relation frequencies across the KG
+    relation_counts = {}
+    for neighbors in kg.values():
+        for _, relation in neighbors:
+            if relation not in relation_counts:
+                relation_counts[relation] = 0
+            relation_counts[relation] += 1
+
+    # Normalize frequencies to create probabilities
+    total_relations = sum(relation_counts.values())
+    relation_probs = {rel: count / total_relations for rel, count in relation_counts.items()}
+
+    # Initialize adjacency matrices
+    adj_entity = np.zeros([entity_num, args.neighbor_sample_size], dtype=np.int64)
+    adj_relation = np.zeros([entity_num, args.neighbor_sample_size], dtype=np.int64)
+
+    for entity in range(entity_num):
+        neighbors = kg.get(entity, [])
+        if not neighbors:
+            continue  # Skip entities with no neighbors
+
+        # Calculate probabilities based on relation frequency
+        neighbor_probs = np.array([relation_probs[neighbor[1]] for neighbor in neighbors], dtype=np.float32)
+        neighbor_probs /= np.sum(neighbor_probs)  # Normalize
+
+        # Sample neighbors based on relation-frequency probabilities
+        n_neighbors = len(neighbors)
+        if n_neighbors >= args.neighbor_sample_size:
+            sampled_indices = np.random.choice(
+                range(n_neighbors),
+                size=args.neighbor_sample_size,
+                replace=False,
+                p=neighbor_probs
+            )
+        else:
+            sampled_indices = np.random.choice(
+                range(n_neighbors),
+                size=args.neighbor_sample_size,
+                replace=True,
+                p=neighbor_probs
+            )
+
+        sampled_neighbors = [neighbors[i] for i in sampled_indices]
+        adj_entity[entity] = [neighbor[0] for neighbor in sampled_neighbors]
+        adj_relation[entity] = [neighbor[1] for neighbor in sampled_neighbors]
+
+    return adj_entity, adj_relation

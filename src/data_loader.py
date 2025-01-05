@@ -65,7 +65,17 @@ def load_kg(args):
     n_relation = len(set(kg_np[:, 1]))
 
     kg = construct_kg(kg_np)
-    adj_entity, adj_relation = construct_adj(args, kg, n_entity)
+
+    if args.sampling_method == 'random':
+        adj_entity, adj_relation = construct_adj(args, kg, n_entity)
+    elif args.sampling_method == 'degree':
+        adj_entity, adj_relation = construct_adj_with_degree_weighted_sampling(args, kg, n_entity)
+    elif args.sampling_method == 'relation':
+        adj_entity, adj_relation = construct_adj_with_relation_frequency_weighted_sampling(args, kg, n_entity)
+    elif args.sampling_method == 'degree_relation':
+        adj_entity, adj_relation = construct_adj_with_degree_and_relation_frequency_weighted_sampling(args, kg, n_entity)
+    else:
+        raise ValueError(f"Unknown sampling method: {args.sampling_method}")
 
     return n_entity, n_relation, adj_entity, adj_relation
 

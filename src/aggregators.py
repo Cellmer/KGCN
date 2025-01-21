@@ -134,3 +134,42 @@ class NeighborAggregator(Aggregator):
         output = tf.reshape(output, [self.batch_size, -1, self.dim])
 
         return self.act(output)
+
+
+class AttentionAggregator(Aggregator):
+    def __init__(self, batch_size, dim, dropout=0., act=tf.nn.relu, name=None):
+        super(AttentionAggregator, self).__init__(batch_size, dim, dropout, act, name)
+
+        with tf.variable_scope(self.name):
+            self.weights = tf.get_variable(
+                shape=[self.dim, self.dim], initializer=tf.contrib.layers.xavier_initializer(), name='weights')
+            self.key_weights = tf.get_variable(
+                shape=[self.dim, self.dim], initializer=tf.contrib.layers.xavier_initializer(), name='key_weights')
+            self.value_weights = tf.get_variable(
+                shape=[self.dim, self.dim], initializer=tf.contrib.layers.xavier_initializer(), name='value_weights')
+            self.bias = tf.get_variable(shape=[self.dim], initializer=tf.zeros_initializer(), name='bias')
+
+    def _call(self, self_vectors, neighbor_vectors, neighbor_relations, user_embeddings):
+        # [batch_size, -1, dim]
+        queries = tf.matmul(self_vectors, self.weights)
+
+        # [batch_size, -1, n_neighbor, dim]
+        keys = tf.matmul(neighbor_vectors, self.key_weights)
+        values = tf.matmul(neighbor_vectors, self.value_weights)
+
+        # [batch_size, -1, n_neighbor]
+        attention_scores = tf.reduce_sum(queries[:, :, None, :] * keys, axis=-1)
+        attention_weights = tf.nn.softmax(attention_scores, axis=-1)
+
+        # [batch_size, -1, dim]
+        neighbors_agg = tf.reduce_sum(attention_weights[:, :, :, None] * values, axis=2)
+
+        # [-1, dim]
+        output = tf.reshape(self_vectors + neighbors_agg, [-1, self.dim])
+        output = tf.nn.dropout(output, keep_prob=1 - self.dropout)
+        output = tf.matmul(output, self.weights) + self.bias
+
+        # [batch_size, -1, dim]
+        output = tf.reshape(output, [self.batch_size, -1, self.dim])
+
+        return self.act(output)
